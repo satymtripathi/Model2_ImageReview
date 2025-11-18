@@ -10,12 +10,12 @@ DATA_FOLDER = Path("data")
 MASTER_FILE = DATA_FOLDER / "reviews_master.csv"
 DATA_FOLDER.mkdir(exist_ok=True)
 
-st.set_page_config(page_title="🩺 Corneal Image Review", layout="wide")
+st.set_page_config(page_title="🦠 Bacterial vs Fungal Review", layout="wide")
 
 # ---------------- HEADER ----------------
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
-    st.title("🩺 Corneal Image Review System Model2")
+    st.title("🦠 Corneal Bacterial vs Fungal Review System")
 with col2:
     st.image("https://cdn-icons-png.flaticon.com/512/3843/3843492.png", width=80)
 
@@ -37,12 +37,12 @@ if REVIEWER_FILE.exists():
     try:
         reviewed = pd.read_csv(REVIEWER_FILE)
         if reviewed.empty or "ImageName" not in reviewed.columns:
-            reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "MarginOfErrorNote", "Feedback"])
+            reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "DiagnosticNote", "Feedback"])
     except Exception as e:
         st.warning(f"⚠️ Could not read your previous file. Starting fresh.\n\nError: {e}")
-        reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "MarginOfErrorNote", "Feedback"])
+        reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "DiagnosticNote", "Feedback"])
 else:
-    reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "MarginOfErrorNote", "Feedback"])
+    reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "DiagnosticNote", "Feedback"])
 
 reviewed_images = reviewed["ImageName"].tolist()
 remaining_images = [img for img in images if img.name not in reviewed_images]
@@ -50,7 +50,7 @@ total_images = len(images)
 completed = len(reviewed_images)
 remaining = len(remaining_images)
 
-# ---------------- Sidebar Compact ----------------
+# ---------------- Sidebar ----------------
 with st.sidebar:
     st.header("🔍 Quick Actions")
     mode = st.radio("Mode:", ["Review New", "Edit Reviews", "Download CSV"], horizontal=False)
@@ -72,24 +72,25 @@ if mode == "Review New":
     with c1:
         st.image(Image.open(current_image), caption=current_image.name, use_container_width=True)
         st.markdown(f"**Progress:** {completed + 1} / {total_images}")
+
     with c2:
         with st.form(key=f"review_form_{current_image.name}", border=True):
             st.markdown(f"### 🖼️ Reviewing: `{current_image.name}`")
             
-            # Condition resets to "Normal" each time
+            # Updated Conditions
             condition = st.radio(
                 "Select Condition:", 
-                ["Normal", "Scar", "Edema", "Infection", "Others", "Not Sure"],
+                ["Bacterial", "Fungal", "Others", "Not Sure"],
                 horizontal=True,
                 index=0,
                 key=f"condition_{current_image.name}"
             )
 
-            # Notes and Feedback reset to blank for each new image
+            # Updated Diagnostic Notes
             margin_note = st.text_area(
-                "Notes (if any):", 
+                "Diagnostic Notes (if any):", 
                 value="", 
-                placeholder="Example: 'Scar with mild edema – acceptable if labeled as Edema or Scar.'",
+                placeholder="Example: 'Dense stromal infiltrate with well-defined borders — suggests Bacterial.'",
                 height=60,
                 key=f"note_{current_image.name}"
             )
@@ -97,7 +98,7 @@ if mode == "Review New":
             feedback = st.text_area(
                 "Feedback (optional):", 
                 value="", 
-                placeholder="Example: 'Slightly blurred – visibility reduced.'", 
+                placeholder="Example: 'Slight blur — fungal hyphae visibility unclear.'", 
                 height=60,
                 key=f"feedback_{current_image.name}"
             )
@@ -109,7 +110,7 @@ if mode == "Review New":
                     "Reviewer": reviewer,
                     "ImageName": current_image.name,
                     "Condition": condition,
-                    "MarginOfErrorNote": margin_note.strip() if margin_note else "",
+                    "DiagnosticNote": margin_note.strip() if margin_note else "",
                     "Feedback": feedback.strip() if feedback else ""
                 }
 
@@ -119,7 +120,7 @@ if mode == "Review New":
 
                 st.success(f"✅ Review for `{current_image.name}` saved!")
                 st.toast("Saved successfully — loading next image...", icon="✅")
-                time.sleep(2)
+                time.sleep(1.8)
                 st.rerun()
 
 # ---------------- Edit Previous Reviews ----------------
@@ -132,24 +133,40 @@ elif mode == "Edit Reviews":
     with c1:
         selected_image = st.selectbox("Select image:", reviewed["ImageName"].tolist())
         st.image(Image.open(IMAGE_FOLDER / selected_image), caption=selected_image, use_container_width=True)
+
     with c2:
         prev = reviewed[reviewed["ImageName"] == selected_image].iloc[0]
         with st.form(key=f"edit_form_{selected_image}", border=True):
             st.markdown(f"### ✏️ Edit Review for `{selected_image}`")
+            
+            # Updated Conditions
             condition = st.radio(
                 "Condition:",
-                ["Normal", "Scar", "Edema", "Infection", "Others", "Not Sure"],
+                ["Bacterial", "Fungal", "Others", "Not Sure"],
                 horizontal=True,
-                index=["Normal", "Scar", "Edema", "Infection", "Others", "Not Sure"].index(prev["Condition"]),
+                index=["Bacterial", "Fungal", "Others", "Not Sure"].index(prev["Condition"]),
                 key=f"edit_condition_{selected_image}"
             )
-            margin_note = st.text_area("Margin of error / clinical note:", value=prev.get("MarginOfErrorNote", ""), height=60, key=f"edit_note_{selected_image}")
-            feedback = st.text_area("Feedback / comments:", value=prev.get("Feedback", ""), height=60, key=f"edit_feedback_{selected_image}")
+
+            margin_note = st.text_area(
+                "Diagnostic Notes:",
+                value=prev.get("DiagnosticNote", ""),
+                height=60,
+                key=f"edit_note_{selected_image}"
+            )
+
+            feedback = st.text_area(
+                "Feedback / comments:",
+                value=prev.get("Feedback", ""),
+                height=60,
+                key=f"edit_feedback_{selected_image}"
+            )
+
             update = st.form_submit_button("💾 Update Review", use_container_width=True)
 
             if update:
                 idx = reviewed[reviewed["ImageName"] == selected_image].index[0]
-                reviewed.loc[idx, ["Condition", "MarginOfErrorNote", "Feedback"]] = [
+                reviewed.loc[idx, ["Condition", "DiagnosticNote", "Feedback"]] = [
                     condition, margin_note.strip(), feedback.strip()
                 ]
                 reviewed.to_csv(REVIEWER_FILE, index=False)
@@ -160,9 +177,10 @@ elif mode == "Edit Reviews":
                     ignore_index=True
                 )
                 merged.to_csv(MASTER_FILE, index=False)
+
                 st.success(f"✅ Updated review for `{selected_image}`!")
                 st.toast("Review updated — refreshing...", icon="🔄")
-                time.sleep(2)
+                time.sleep(1.8)
                 st.rerun()
 
 # ---------------- Download CSV ----------------
@@ -176,8 +194,15 @@ else:
         st.markdown("### 📥 My Review Summary")
         df = pd.read_csv(REVIEWER_FILE)
         st.dataframe(df, height=300, use_container_width=True)
+
     with c2:
         st.markdown("### ⬇️ Download")
         csv_data = df.to_csv(index=False).encode("utf-8")
-        st.download_button("Download My Reviews (CSV)", csv_data, f"{reviewer}_reviews.csv", "text/csv", use_container_width=True)
+        st.download_button(
+            "Download My Reviews (CSV)",
+            csv_data,
+            f"{reviewer}_reviews.csv",
+            "text/csv",
+            use_container_width=True
+        )
         st.success("✅ You can share this file with the project lead.")
