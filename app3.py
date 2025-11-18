@@ -15,7 +15,7 @@ st.set_page_config(page_title="🩺 Corneal Image Review", layout="wide")
 # ---------------- HEADER ----------------
 col1, col2 = st.columns([0.8, 0.2])
 with col1:
-    st.title("🩺 Corneal Image Review System")
+    st.title("🩺 Corneal Image Review System Model2")
 with col2:
     st.image("https://cdn-icons-png.flaticon.com/512/3843/3843492.png", width=80)
 
