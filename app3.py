@@ -31,6 +31,7 @@ REVIEWER_FILE = DATA_FOLDER / f"reviews_{reviewer}.csv"
 # ---------------- Load Images ----------------
 images = list(IMAGE_FOLDER.glob("*.*"))
 images.sort()
+image_names = [img.name for img in images]
 
 # ---------------- Load Previous Reviews Safely ----------------
 if REVIEWER_FILE.exists():
@@ -45,9 +46,21 @@ else:
     reviewed = pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "DiagnosticNote", "Feedback"])
 
 reviewed_images = reviewed["ImageName"].tolist()
-remaining_images = [img for img in images if img.name not in reviewed_images]
+
+# ---------------- Filter Bad Entries ----------------
+missing_files = [img for img in reviewed_images if img not in image_names]
+
+if missing_files:
+    st.warning("⚠️ These reviewed images do NOT exist in your images/ folder:")
+    st.code("\n".join(missing_files))
+
+    # Drop missing entries to avoid app crash
+    reviewed = reviewed[~reviewed["ImageName"].isin(missing_files)]
+    reviewed.to_csv(REVIEWER_FILE, index=False)
+
+remaining_images = [img for img in images if img.name not in reviewed["ImageName"].tolist()]
 total_images = len(images)
-completed = len(reviewed_images)
+completed = len(reviewed)
 remaining = len(remaining_images)
 
 # ---------------- Sidebar ----------------
@@ -69,38 +82,40 @@ if mode == "Review New":
     current_image = remaining_images[0]
 
     c1, c2 = st.columns([0.55, 0.45])
+
     with c1:
-        st.image(Image.open(current_image), caption=current_image.name, use_container_width=True)
+        # Safe image loading
+        try:
+            st.image(Image.open(current_image), caption=current_image.name, use_container_width=True)
+        except:
+            st.error(f"❌ Cannot open image: {current_image.name}")
+            st.stop()
+
         st.markdown(f"**Progress:** {completed + 1} / {total_images}")
 
     with c2:
         with st.form(key=f"review_form_{current_image.name}", border=True):
             st.markdown(f"### 🖼️ Reviewing: `{current_image.name}`")
             
-            # Updated Conditions
             condition = st.radio(
                 "Select Condition:", 
                 ["Bacterial", "Fungal", "Others", "Not Sure"],
                 horizontal=True,
-                index=0,
-                key=f"condition_{current_image.name}"
+                index=0
             )
 
-            # Updated Diagnostic Notes
             margin_note = st.text_area(
                 "Diagnostic Notes (if any):", 
                 value="", 
-                placeholder="Example: 'Dense stromal infiltrate with well-defined borders — suggests Bacterial.'",
-                height=60,
-                key=f"note_{current_image.name}"
+                placeholder="Example: 'Satellite lesions — suggests Fungal.'",
+                height=60
             )
 
             feedback = st.text_area(
                 "Feedback (optional):", 
                 value="", 
-                placeholder="Example: 'Slight blur — fungal hyphae visibility unclear.'", 
-                height=60,
-                key=f"feedback_{current_image.name}"
+                placeholder="Example: 'Image slightly blurred.'", 
+                height=60
             )
 
             submit = st.form_submit_button("✅ Submit Review", use_container_width=True)
@@ -110,8 +125,8 @@ if mode == "Review New":
                     "Reviewer": reviewer,
                     "ImageName": current_image.name,
                     "Condition": condition,
-                    "DiagnosticNote": margin_note.strip() if margin_note else "",
-                    "Feedback": feedback.strip() if feedback else ""
+                    "DiagnosticNote": margin_note.strip(),
+                    "Feedback": feedback.strip()
                 }
 
                 df_new = pd.DataFrame([new_data])
@@ -120,46 +135,51 @@ if mode == "Review New":
 
                 st.success(f"✅ Review for `{current_image.name}` saved!")
                 st.toast("Saved successfully — loading next image...", icon="✅")
-                time.sleep(1.8)
+                time.sleep(1.5)
                 st.rerun()
 
 # ---------------- Edit Previous Reviews ----------------
 elif mode == "Edit Reviews":
+
     if reviewed.empty:
         st.info("No reviews found yet. Please review some images first.")
         st.stop()
 
     c1, c2 = st.columns([0.4, 0.6])
+
     with c1:
         selected_image = st.selectbox("Select image:", reviewed["ImageName"].tolist())
-        st.image(Image.open(IMAGE_FOLDER / selected_image), caption=selected_image, use_container_width=True)
+        img_path = IMAGE_FOLDER / selected_image
+
+        if img_path.exists():
+            st.image(Image.open(img_path), caption=selected_image, use_container_width=True)
+        else:
+            st.error(f"❌ Image not found: {selected_image}")
+            st.stop()
 
     with c2:
         prev = reviewed[reviewed["ImageName"] == selected_image].iloc[0]
+
         with st.form(key=f"edit_form_{selected_image}", border=True):
             st.markdown(f"### ✏️ Edit Review for `{selected_image}`")
-            
-            # Updated Conditions
+
             condition = st.radio(
                 "Condition:",
                 ["Bacterial", "Fungal", "Others", "Not Sure"],
                 horizontal=True,
-                index=["Bacterial", "Fungal", "Others", "Not Sure"].index(prev["Condition"]),
-                key=f"edit_condition_{selected_image}"
+                index=["Bacterial", "Fungal", "Others", "Not Sure"].index(prev["Condition"])
             )
 
             margin_note = st.text_area(
                 "Diagnostic Notes:",
                 value=prev.get("DiagnosticNote", ""),
-                height=60,
-                key=f"edit_note_{selected_image}"
+                height=60
             )
 
             feedback = st.text_area(
                 "Feedback / comments:",
                 value=prev.get("Feedback", ""),
-                height=60,
-                key=f"edit_feedback_{selected_image}"
+                height=60
             )
 
             update = st.form_submit_button("💾 Update Review", use_container_width=True)
@@ -180,7 +200,7 @@ elif mode == "Edit Reviews":
 
                 st.success(f"✅ Updated review for `{selected_image}`!")
                 st.toast("Review updated — refreshing...", icon="🔄")
-                time.sleep(1.8)
+                time.sleep(1.5)
                 st.rerun()
 
 # ---------------- Download CSV ----------------
@@ -190,6 +210,7 @@ else:
         st.stop()
 
     c1, c2 = st.columns([0.6, 0.4])
+
     with c1:
         st.markdown("### 📥 My Review Summary")
         df = pd.read_csv(REVIEWER_FILE)
@@ -205,4 +226,4 @@ else:
             "text/csv",
             use_container_width=True
         )
-        st.success("✅ You can share this file with the project lead.")
+        st.success("✅ Download ready!")
