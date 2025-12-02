@@ -2,190 +2,104 @@ import streamlit as st
 import pandas as pd
 from pathlib import Path
 
-# -------------------- CONFIG --------------------
-DATA_FOLDER = Path("reviews")
+# ------------------- CONFIG -------------------
+st.set_page_config(page_title="Model 2 Image Review", layout="wide")
+
 IMAGES_FOLDER = Path("images")
-IMAGES_FOLDER.mkdir(exist_ok=True)
-DATA_FOLDER.mkdir(exist_ok=True)
+OUTPUT_CSV = "final_reviews.csv"
 
-# Dropdown of reviewers
-reviewer = st.sidebar.selectbox("Select Reviewer", ["Reviewer1", "Reviewer2", "Reviewer3"])
-REVIEWER_FILE = DATA_FOLDER / f"reviews_{reviewer}.csv"
+# ------------------- LOAD IMAGES -------------------
+images = sorted([p for p in IMAGES_FOLDER.glob("*") if p.suffix.lower() in [".jpg", ".jpeg", ".png"]])
 
-# If reviewer file doesn't exist, create it
-if not REVIEWER_FILE.exists():
-    pd.DataFrame(columns=["Reviewer", "ImageName", "Condition", "DiagnosticNote", "Feedback"]).to_csv(REVIEWER_FILE, index=False)
+# Create CSV if not exists
+if not Path(OUTPUT_CSV).exists():
+    df_init = pd.DataFrame({"ImageName": [img.name for img in images],
+                            "Review": [""] * len(images)})
+    df_init.to_csv(OUTPUT_CSV, index=False)
 
-reviewed = pd.read_csv(REVIEWER_FILE)
+df = pd.read_csv(OUTPUT_CSV)
 
-# Sidebar menu (Option B)
-menu = st.sidebar.radio(
-    "Navigation",
-    ["Review New", "View All Images (Review Anytime)", "Edit Reviews", "Download CSV"]
-)
+# ------------------- SIDEBAR -------------------
+st.sidebar.title("Navigation")
+mode = st.sidebar.radio("Select Mode:", ["Review New", "Edit Reviews", "Download CSV", "View All Images"])
 
-
-images = list(IMAGES_FOLDER.glob("*.*"))
-images = [img for img in images if img.suffix.lower() in [".jpg", ".jpeg", ".png"]]
-
-
-# ============================================================
-#                   MODE 1 : REVIEW NEW
-# ============================================================
-if menu == "Review New":
+# ------------------- MODE: REVIEW NEW -------------------
+if mode == "Review New":
     st.header("📝 Review New Images")
 
-    reviewed_names = set(reviewed["ImageName"])
-    pending = [img for img in images if img.name not in reviewed_names]
-
+    pending = df[df["Review"] == ""]
     if len(pending) == 0:
-        st.success("🎉 All images reviewed!")
+        st.success("All images have been reviewed.")
         st.stop()
 
-    img = pending[0]
-    st.image(str(img), caption=img.name, use_container_width=True)
+    row = pending.iloc[0]
+    img_name = row["ImageName"]
 
-    with st.form("review_form"):
-        condition = st.radio("Condition:", ["Bacterial", "Fungal", "Others", "Not Sure"])
-        diagnostic = st.text_area("Diagnostic Note:", "")
-        feedback = st.text_area("Feedback:", "")
-        submit = st.form_submit_button("Save Review")
+    st.subheader(f"Reviewing: {img_name}")
+    img_path = IMAGES_FOLDER / img_name
 
-        if submit:
-            new_entry = {
-                "Reviewer": reviewer,
-                "ImageName": img.name,
-                "Condition": condition,
-                "DiagnosticNote": diagnostic.strip(),
-                "Feedback": feedback.strip()
-            }
+    st.image(str(img_path), use_container_width=True)
 
-            reviewed = pd.concat([reviewed, pd.DataFrame([new_entry])], ignore_index=True)
-            reviewed.to_csv(REVIEWER_FILE, index=False)
+    review = st.radio("Select Review:", ["Infection", "Normal", "Not Sure"], horizontal=True)
 
-            st.success("Saved!")
-            st.rerun()
+    if st.button("Submit Review"):
+        df.loc[df.ImageName == img_name, "Review"] = review
+        df.to_csv(OUTPUT_CSV, index=False)
+        st.success("Saved! Refresh or click Next to continue.")
 
+# ------------------- MODE: EDIT REVIEWS -------------------
+elif mode == "Edit Reviews":
+    st.header("✏️ Edit Existing Reviews")
 
-# ============================================================
-#           MODE 2 : VIEW ALL IMAGES (REVIEW ANYTIME)
-# ============================================================
-elif menu == "View All Images (Review Anytime)":
-    st.header("🖼️ View All Images — Review Anytime")
+    for i, row in df.iterrows():
+        with st.expander(row["ImageName"]):
+            img_path = IMAGES_FOLDER / row["ImageName"]
+            st.image(str(img_path), use_container_width=True)
+
+            new_review = st.radio(
+                "Update Review:",
+                ["Infection", "Normal", "Not Sure"],
+                index=["Infection", "Normal", "Not Sure"].index(row["Review"]),
+                key=row["ImageName"]
+            )
+            df.loc[i, "Review"] = new_review
+
+    if st.button("Save All Changes"):
+        df.to_csv(OUTPUT_CSV, index=False)
+        st.success("All changes saved!")
+
+# ------------------- MODE: DOWNLOAD CSV -------------------
+elif mode == "Download CSV":
+    st.header("📥 Download Final CSV")
+
+    st.dataframe(df)
+
+    st.download_button(
+        label="Download CSV",
+        data=df.to_csv(index=False),
+        file_name="final_reviews.csv",
+        mime="text/csv"
+    )
+
+# ------------------- MODE: VIEW ALL IMAGES (NO ZOOM) -------------------
+elif mode == "View All Images":
+    st.header("🖼️ All Images Preview")
 
     if len(images) == 0:
-        st.info("No images found.")
+        st.info("No images found in the images/ folder.")
         st.stop()
 
-    cols = st.columns(5)
+    cols = st.columns(5)  # 5 images per row
     col_idx = 0
 
     for img in images:
-        img_name = img.name
-
-        # Fetch previous review if exists
-        prev_row = reviewed[reviewed["ImageName"] == img_name]
-        if not prev_row.empty:
-            prev_condition = prev_row.iloc[0]["Condition"]
-            prev_note = prev_row.iloc[0]["DiagnosticNote"]
-            prev_feedback = prev_row.iloc[0]["Feedback"]
-        else:
-            prev_condition = "Bacterial"
-            prev_note = ""
-            prev_feedback = ""
-
         with cols[col_idx]:
-            st.image(str(img), caption=img_name, use_container_width=True)
-
-            with st.form(key=f"form_{img_name}"):
-                condition = st.radio(
-                    "Condition:",
-                    ["Bacterial", "Fungal", "Others", "Not Sure"],
-                    index=["Bacterial", "Fungal", "Others", "Not Sure"].index(prev_condition)
-                )
-
-                diagnostic = st.text_area("Diagnostic Note:", prev_note, height=60)
-                feedback = st.text_area("Feedback:", prev_feedback, height=60)
-
-                save_btn = st.form_submit_button("Save", use_container_width=True)
-
-                if save_btn:
-                    reviewed = reviewed[reviewed["ImageName"] != img_name]
-
-                    new_entry = {
-                        "Reviewer": reviewer,
-                        "ImageName": img_name,
-                        "Condition": condition,
-                        "DiagnosticNote": diagnostic.strip(),
-                        "Feedback": feedback.strip()
-                    }
-
-                    reviewed = pd.concat([reviewed, pd.DataFrame([new_entry])], ignore_index=True)
-                    reviewed.to_csv(REVIEWER_FILE, index=False)
-
-                    st.success(f"Saved review for {img_name}")
-                    st.rerun()
+            try:
+                st.image(str(img), caption=img.name, use_container_width=True)
+            except Exception as e:
+                st.error(f"Error loading {img.name}: {e}")
 
         col_idx += 1
         if col_idx == 5:
             cols = st.columns(5)
             col_idx = 0
-
-
-# ============================================================
-#                   MODE 3 : EDIT REVIEWS  
-# ============================================================
-elif menu == "Edit Reviews":
-    st.header("✏️ Edit Existing Reviews")
-
-    if len(reviewed) == 0:
-        st.info("No reviews yet.")
-        st.stop()
-
-    img_list = reviewed["ImageName"].tolist()
-    img_name = st.selectbox("Select Image to Edit", img_list)
-
-    row = reviewed[reviewed["ImageName"] == img_name].iloc[0]
-
-    st.image(str(IMAGES_FOLDER / img_name), caption=img_name, use_container_width=True)
-
-    with st.form("edit_form"):
-        condition = st.radio(
-            "Condition:",
-            ["Bacterial", "Fungal", "Others", "Not Sure"],
-            index=["Bacterial", "Fungal", "Others", "Not Sure"].index(row["Condition"])
-        )
-        diagnostic = st.text_area("Diagnostic Note:", row["DiagnosticNote"])
-        feedback = st.text_area("Feedback:", row["Feedback"])
-
-        update_btn = st.form_submit_button("Update")
-
-        if update_btn:
-            reviewed = reviewed[reviewed["ImageName"] != img_name]
-
-            updated = {
-                "Reviewer": reviewer,
-                "ImageName": img_name,
-                "Condition": condition,
-                "DiagnosticNote": diagnostic.strip(),
-                "Feedback": feedback.strip()
-            }
-
-            reviewed = pd.concat([reviewed, pd.DataFrame([updated])], ignore_index=True)
-            reviewed.to_csv(REVIEWER_FILE, index=False)
-
-            st.success("Updated successfully!")
-            st.rerun()
-
-
-# ============================================================
-#               MODE 4 : DOWNLOAD CSV  
-# ============================================================
-elif menu == "Download CSV":
-    st.header("⬇️ Download Your Reviews")
-    st.download_button(
-        "Download CSV",
-        data=reviewed.to_csv(index=False),
-        file_name=f"{reviewer}_reviews.csv",
-        mime="text/csv"
-    )
