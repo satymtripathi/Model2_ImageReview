@@ -65,65 +65,19 @@ remaining = len(remaining_images)
 # ---------------- Sidebar ----------------
 with st.sidebar:
     st.header("🔍 Quick Actions")
-    mode = st.radio(
-        "Mode:",
-        ["Review New", "Edit Reviews", "Download CSV", "View All Images"],
-        horizontal=False
-    )
+    mode = st.radio("Mode:", ["Review New", "Edit Reviews", "Download CSV", "View All Images"])
     st.markdown("---")
     st.write(f"👩‍⚕️ **Reviewer:** `{reviewer}`")
     st.progress(completed / total_images if total_images > 0 else 0)
     st.caption(f"✅ Completed: {completed} / {total_images}")
     st.caption(f"🕒 Remaining: {remaining}")
 
-# ------------------------------------------------------------
-# ---------------------- VIEW ALL IMAGES ----------------------
-# ------------------------------------------------------------
-
-if mode == "View All Images":
-    st.header("🖼️ All Images Preview")
-
-    if len(images) == 0:
-        st.info("No images found in the images/ folder.")
-        st.stop()
-
-    cols = st.columns(5)  # 5 per row
-    col_idx = 0
-
-    for img in images:
-
-        with cols[col_idx]:
-            try:
-                # Create a button using the image thumbnail
-                if st.button(
-                    label="",
-                    key=f"zoom_{img.name}",
-                    help="Click to zoom",
-                    type="secondary"
-                ):
-                    with st.modal(f"🔍 Zoom: {img.name}"):
-                        st.image(str(img), caption=img.name, use_container_width=True)
-
-                st.image(str(img), caption=img.name, use_container_width=True)
-
-            except Exception as e:
-                st.error(f"Error loading {img.name}: {e}")
-
-        col_idx += 1
-
-        if col_idx == 5:
-            cols = st.columns(5)
-            col_idx = 0
-
-    st.stop()
-
-# ------------------------------------------------------------
-# -------------------- REVIEW NEW IMAGES ----------------------
-# ------------------------------------------------------------
-
+# =========================================================
+# ---------------- Review New Images ----------------
+# =========================================================
 if mode == "Review New":
     if not remaining_images:
-        st.success("🎉 All images reviewed! Switch to *Edit Reviews* or *Download CSV*.")
+        st.success("🎉 All images reviewed! You can switch to *Edit Reviews* or *Download CSV*.")
         st.stop()
 
     current_image = remaining_images[0]
@@ -184,11 +138,9 @@ if mode == "Review New":
                 time.sleep(1.5)
                 st.rerun()
 
-
-# ------------------------------------------------------------
-# ---------------------- EDIT REVIEWS -------------------------
-# ------------------------------------------------------------
-
+# =========================================================
+# ---------------- Edit Previous Reviews ----------------
+# =========================================================
 elif mode == "Edit Reviews":
 
     if reviewed.empty:
@@ -253,12 +205,10 @@ elif mode == "Edit Reviews":
                 time.sleep(1.5)
                 st.rerun()
 
-
-# ------------------------------------------------------------
-# ---------------------- DOWNLOAD CSV -------------------------
-# ------------------------------------------------------------
-
-else:
+# =========================================================
+# ---------------- Download CSV ----------------
+# =========================================================
+elif mode == "Download CSV":
     if not REVIEWER_FILE.exists():
         st.info("No reviews available yet.")
         st.stop()
@@ -281,3 +231,33 @@ else:
             use_container_width=True
         )
         st.success("✅ Download ready!")
+
+# =========================================================
+# ---------------- View All Images (Grid + Zoom) ----------------
+# =========================================================
+elif mode == "View All Images":
+    st.header("🖼️ All Images Preview")
+
+    if len(images) == 0:
+        st.info("No images found in the images/ folder.")
+        st.stop()
+
+    cols = st.columns(5)
+    col_idx = 0
+
+    for img in images:
+        with cols[col_idx]:
+            try:
+                st.image(str(img), caption=img.name, use_container_width=True)
+
+                # Zoom expander (compatible with old Streamlit)
+                with st.expander(f"🔍 Zoom: {img.name}"):
+                    st.image(str(img), caption=img.name, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Error loading {img.name}: {e}")
+
+        col_idx += 1
+        if col_idx == 5:
+            cols = st.columns(5)
+            col_idx = 0
