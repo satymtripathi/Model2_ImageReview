@@ -54,7 +54,6 @@ if missing_files:
     st.warning("⚠️ These reviewed images do NOT exist in your images/ folder:")
     st.code("\n".join(missing_files))
 
-    # Drop missing entries to avoid app crash
     reviewed = reviewed[~reviewed["ImageName"].isin(missing_files)]
     reviewed.to_csv(REVIEWER_FILE, index=False)
 
@@ -66,17 +65,65 @@ remaining = len(remaining_images)
 # ---------------- Sidebar ----------------
 with st.sidebar:
     st.header("🔍 Quick Actions")
-    mode = st.radio("Mode:", ["Review New", "Edit Reviews", "Download CSV"], horizontal=False)
+    mode = st.radio(
+        "Mode:",
+        ["Review New", "Edit Reviews", "Download CSV", "View All Images"],
+        horizontal=False
+    )
     st.markdown("---")
     st.write(f"👩‍⚕️ **Reviewer:** `{reviewer}`")
     st.progress(completed / total_images if total_images > 0 else 0)
     st.caption(f"✅ Completed: {completed} / {total_images}")
     st.caption(f"🕒 Remaining: {remaining}")
 
-# ---------------- Review New Images ----------------
+# ------------------------------------------------------------
+# ---------------------- VIEW ALL IMAGES ----------------------
+# ------------------------------------------------------------
+
+if mode == "View All Images":
+    st.header("🖼️ All Images Preview")
+
+    if len(images) == 0:
+        st.info("No images found in the images/ folder.")
+        st.stop()
+
+    cols = st.columns(5)  # 5 per row
+    col_idx = 0
+
+    for img in images:
+
+        with cols[col_idx]:
+            try:
+                # Create a button using the image thumbnail
+                if st.button(
+                    label="",
+                    key=f"zoom_{img.name}",
+                    help="Click to zoom",
+                    type="secondary"
+                ):
+                    with st.modal(f"🔍 Zoom: {img.name}"):
+                        st.image(str(img), caption=img.name, use_container_width=True)
+
+                st.image(str(img), caption=img.name, use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Error loading {img.name}: {e}")
+
+        col_idx += 1
+
+        if col_idx == 5:
+            cols = st.columns(5)
+            col_idx = 0
+
+    st.stop()
+
+# ------------------------------------------------------------
+# -------------------- REVIEW NEW IMAGES ----------------------
+# ------------------------------------------------------------
+
 if mode == "Review New":
     if not remaining_images:
-        st.success("🎉 All images reviewed! You can switch to *Edit Reviews* or *Download CSV*.")
+        st.success("🎉 All images reviewed! Switch to *Edit Reviews* or *Download CSV*.")
         st.stop()
 
     current_image = remaining_images[0]
@@ -84,7 +131,6 @@ if mode == "Review New":
     c1, c2 = st.columns([0.55, 0.45])
 
     with c1:
-        # Safe image loading
         try:
             st.image(Image.open(current_image), caption=current_image.name, use_container_width=True)
         except:
@@ -138,7 +184,11 @@ if mode == "Review New":
                 time.sleep(1.5)
                 st.rerun()
 
-# ---------------- Edit Previous Reviews ----------------
+
+# ------------------------------------------------------------
+# ---------------------- EDIT REVIEWS -------------------------
+# ------------------------------------------------------------
+
 elif mode == "Edit Reviews":
 
     if reviewed.empty:
@@ -203,7 +253,11 @@ elif mode == "Edit Reviews":
                 time.sleep(1.5)
                 st.rerun()
 
-# ---------------- Download CSV ----------------
+
+# ------------------------------------------------------------
+# ---------------------- DOWNLOAD CSV -------------------------
+# ------------------------------------------------------------
+
 else:
     if not REVIEWER_FILE.exists():
         st.info("No reviews available yet.")
