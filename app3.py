@@ -258,7 +258,7 @@ elif mode == "View All Images (Review Anytime)":
                     any_saved = True
                     # short sleep to give user feedback then rerun to refresh forms
                     time.sleep(0.6)
-                    st.experimental_rerun()
+                    st.rerun()
 
         col_idx += 1
         if col_idx == 5:
